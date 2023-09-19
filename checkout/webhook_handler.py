@@ -1,14 +1,15 @@
-from django.http import HttpResponse
-from django.core.mail import send_mail
-from django.template.loader import render_to_string
-from django.conf import settings
-
-from .models import Order, OrderLineItem
-from products.models import Product
-from profiles.models import UserProfile
-
+from email.message import EmailMessage
+import ssl
+import smtplib
 import json
 import time
+from django.http import HttpResponse
+from django.template.loader import render_to_string
+from django.conf import settings
+from profiles.models import UserProfile
+from products.models import Product
+from .models import Order, OrderLineItem
+
 
 class StripeWH_Handler:
     """Handle Stripe webhooks"""
@@ -26,12 +27,18 @@ class StripeWH_Handler:
             'checkout/confirmation_emails/confirmation_email_body.txt',
             {'order': order, 'contact_email': settings.DEFAULT_FROM_EMAIL})
         
-        send_mail(
-            subject,
-            body,
-            settings.DEFAULT_FROM_EMAIL,
-            [cust_email]
-        )        
+        em = EmailMessage()
+        em["From"] = settings.DEFAULT_FROM_EMAIL
+        em["To"] = cust_email
+        em["Subject"] = subject
+        em.set_content(body)
+
+        context = ssl.create_default_context()
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as smtp:
+            smtp.login(settings.DEFAULT_FROM_EMAIL, settings.EMAIL_HOST_PASSWORD)
+            smtp.sendmail(settings.DEFAULT_FROM_EMAIL, cust_email, em.as_string())
+    
 
     def handle_event(self, event):
         """
